@@ -68,6 +68,10 @@
   [ast]
   (anf-application ast :children #(cons 'throw %)))
 
+(defmethod anf :recur
+  [ast]
+  (anf-application ast :exprs #(cons 'recur %)))
+
 (defmethod anf :map
   [ast]
   (anf-application ast :children #(apply hash-map %)))
@@ -109,10 +113,9 @@
 ;;TODO ALL THE OPS!
 ;(defmethod anf :def
 ;(defmethod anf :fn
-;(defmethod anf :let
+;(defmethod anf :let                 ; also consider & test loop/recur
 ;(defmethod anf :do
 ;(defmethod anf :try*
-;(defmethod anf :recur
 ;(defmethod anf :ns
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
@@ -128,7 +131,7 @@
 (defmulti cps
   "Applies a Continuation Passing Style transformation to an AST.
   The transformation is selective with regard to trivial expressions and
-  assumes that serious call-sites are in Administrative Normal Form."
+  assumes that serious expressions are in Administrative Normal Form."
   (fn [ast k]
     (:op ast)))
 
