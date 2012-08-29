@@ -64,6 +64,10 @@
   [ast]
   (anf-application ast :children #(cons 'new %)))
 
+(defmethod anf :throw
+  [ast]
+  (anf-application ast :children #(cons 'throw %)))
+
 (defmethod anf :map
   [ast]
   (anf-application ast :children #(apply hash-map %)))
@@ -103,7 +107,6 @@
                         (cljs.core/with-meta expr# meta#)))))
 
 ;;TODO ALL THE OPS!
-;(defmethod anf :throw
 ;(defmethod anf :def
 ;(defmethod anf :fn
 ;(defmethod anf :let
@@ -228,6 +231,10 @@
 (show-anf '#{1})
 
 (show-anf '#{(cps/call-cc 1)})
+
+(show-anf '(throw 1))
+
+(show-anf '(throw (cps/call-cc 1)))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
