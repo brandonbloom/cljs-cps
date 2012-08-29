@@ -49,40 +49,44 @@
   (let [syms (repeatedly (count args) #(gensym "anf"))
         forms (map (comp :form anf) args)]
     (ana/analyze env `(let [~@(interleave syms forms)]
-                        (~@(map :form prefix) ~@syms)))))
-
+                        (~@prefix ~@syms)))))
 
 (defmethod anf :invoke
   [{:keys [env children f args] :as ast}]
   (if (control-op? f)
     (if (every? trivial? args)
       ast
-      (anf-application env [f] args))
+      (anf-application env [(:form f)] args))
     (if (trivial? ast)
       ast
       (anf-application env [] children))))
 
+(defmethod anf :new
+  [{:keys [env children] :as ast}]
+  (if (every? trivial? children)
+    ast
+    (anf-application env ['new] children)))
+
 ;;TODO ALL THE OPS!
-;(defmethod cps :meta
-;(defmethod cps :map
-;(defmethod cps :vector
-;(defmethod cps :set
-;(defmethod cps :constant
-;(defmethod cps :if
-;(defmethod cps :throw
-;(defmethod cps :def
-;(defmethod cps :fn
-;(defmethod cps :do
-;(defmethod cps :try*
-;(defmethod cps :let
-;(defmethod cps :recur
-;(defmethod cps :new
-;(defmethod cps :set!
-;(defmethod cps :ns
-;(defmethod cps :deftype*
-;(defmethod cps :defrecord*
-;(defmethod cps :dot
-;(defmethod cps :js
+;(defmethod anf :meta
+;(defmethod anf :map
+;(defmethod anf :vector
+;(defmethod anf :set
+;(defmethod anf :constant
+;(defmethod anf :if
+;(defmethod anf :throw
+;(defmethod anf :def
+;(defmethod anf :fn
+;(defmethod anf :do
+;(defmethod anf :try*
+;(defmethod anf :let
+;(defmethod anf :recur
+;(defmethod anf :set!
+;(defmethod anf :ns
+;(defmethod anf :deftype*
+;(defmethod anf :defrecord*
+;(defmethod anf :dot
+;(defmethod anf :js
 
 (defn- wrap-return
   [{:keys [env context] :as ast} k]
@@ -165,6 +169,10 @@
 (show-anf '(identity 1))
 
 (show-anf '(identity 1 (cps/call-cc 2) 3 (cps/call-cc 4)))
+
+(show-anf '(Integer. 1))
+
+(show-anf '(Integer. (cps/call-cc 1)))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
