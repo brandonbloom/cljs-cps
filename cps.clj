@@ -41,12 +41,12 @@
 
 (defmethod anf :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:var} op)
+  (when-not (#{:var :constant} op)
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
 (defn- anf-application [env prefix args]
-  (let [syms (repeatedly (count args) #(gensym "anf"))
+  (let [syms (repeatedly (count args) #(gensym "arg"))
         forms (map (comp :form anf) args)]
     (ana/analyze env `(let [~@(interleave syms forms)]
                         (~@prefix ~@syms)))))
@@ -67,21 +67,34 @@
     ast
     (anf-application env ['new] children)))
 
+(defmethod anf :set!
+  [{:keys [env target val] :as ast}]
+  (if (trivial? val)
+    ast
+    (ana/analyze env `(let [val# ~(-> val anf :form)]
+                        (set! ~(:form target) val#)))))
+
+(defmethod anf :if
+  [{:keys [env test then else] :as ast}]
+  (let [then (-> then anf :form)
+        else (when else [(-> else anf :form)])]
+    (ana/analyze env (if (trivial? test)
+                       `(if ~(:form test) ~then ~@else)
+                       `(let [test# ~(-> test anf :form)]
+                          (if test# ~then ~@else))))))
+
 ;;TODO ALL THE OPS!
 ;(defmethod anf :meta
 ;(defmethod anf :map
 ;(defmethod anf :vector
 ;(defmethod anf :set
-;(defmethod anf :constant
-;(defmethod anf :if
 ;(defmethod anf :throw
 ;(defmethod anf :def
 ;(defmethod anf :fn
+;(defmethod anf :let
 ;(defmethod anf :do
 ;(defmethod anf :try*
-;(defmethod anf :let
 ;(defmethod anf :recur
-;(defmethod anf :set!
 ;(defmethod anf :ns
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
@@ -127,7 +140,7 @@
 ;(defmethod cps :fn
 ;(defmethod cps :do
 ;(defmethod cps :try*
-;(defmethod cps :let
+;(defmethod cps :let           ; if loop, use trampoline-like thing
 ;(defmethod cps :recur
 ;(defmethod cps :new
 ;(defmethod cps :set!
@@ -165,7 +178,6 @@
     :form
     pprint))
 
-
 (show-anf '(identity 1))
 
 (show-anf '(identity 1 (cps/call-cc 2) 3 (cps/call-cc 4)))
@@ -173,6 +185,22 @@
 (show-anf '(Integer. 1))
 
 (show-anf '(Integer. (cps/call-cc 1)))
+
+(show-anf '(set! x 1))
+
+(show-anf '(set! x (cps/call-cc 1)))
+
+(show-anf '(set! x (identity (cps/call-cc 1))))
+
+(show-anf '(if 1 2))
+
+(show-anf '(if 1 2 3))
+
+(show-anf '(if (cps/call-cc 1) 2 3))
+
+(show-anf '(if 1 (identity (cps/call-cc 2)) 3))
+
+(show-anf '(if (cps/call-cc 1) (identity (cps/call-cc 2)) 3))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
