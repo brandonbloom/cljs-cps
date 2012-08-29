@@ -83,8 +83,17 @@
                        `(let [test# ~(-> test anf :form)]
                           (if test# ~then ~@else))))))
 
+;;TODO: Test this! Turns out that it's tricky to work around the reader.
+(defmethod anf :meta
+  [{:keys [env meta expr children] :as ast}]
+  (if (every? trivial? children)
+    ast
+    ;NOTE: funky expr/meta evaluation order matches emit phase
+    (ana/analyze env `(let [expr# ~(-> expr anf :form)
+                            meta# ~(-> meta anf :form)]
+                        (cljs.core/with-meta expr# meta#)))))
+
 ;;TODO ALL THE OPS!
-;(defmethod anf :meta
 ;(defmethod anf :map
 ;(defmethod anf :vector
 ;(defmethod anf :set
