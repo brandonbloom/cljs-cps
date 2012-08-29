@@ -45,27 +45,36 @@
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
-(defn- anf-application [env prefix args]
-  (let [syms (repeatedly (count args) #(gensym "arg"))
-        forms (map (comp :form anf) args)]
-    (ana/analyze env `(let [~@(interleave syms forms)]
-                        (~@prefix ~@syms)))))
-
-(defmethod anf :invoke
-  [{:keys [env children f args] :as ast}]
-  (if (control-op? f)
+(defn- anf-application [{:keys [env] :as ast} key f]
+  (let [args (key ast)]
     (if (every? trivial? args)
       ast
-      (anf-application env [(:form f)] args))
-    (if (trivial? ast)
-      ast
-      (anf-application env [] children))))
+      (let [syms (repeatedly (count args) gensym)
+            forms (map (comp :form anf) args)]
+        (ana/analyze env `(let [~@(interleave syms forms)]
+                            ~(f syms)))))))
+
+(defmethod anf :invoke
+  [{:keys [f] :as ast}]
+  (if (control-op? f)
+    (anf-application ast :args #(cons (:form f) %)))
+    (anf-application ast :children identity))
 
 (defmethod anf :new
-  [{:keys [env children] :as ast}]
-  (if (every? trivial? children)
-    ast
-    (anf-application env ['new] children)))
+  [ast]
+  (anf-application ast :children #(cons 'new %)))
+
+(defmethod anf :map
+  [ast]
+  (anf-application ast :children #(apply hash-map %)))
+
+(defmethod anf :vector
+  [ast]
+  (anf-application ast :items vec))
+
+(defmethod anf :set
+  [ast]
+  (anf-application ast :items set))
 
 (defmethod anf :set!
   [{:keys [env target val] :as ast}]
@@ -94,9 +103,6 @@
                         (cljs.core/with-meta expr# meta#)))))
 
 ;;TODO ALL THE OPS!
-;(defmethod anf :map
-;(defmethod anf :vector
-;(defmethod anf :set
 ;(defmethod anf :throw
 ;(defmethod anf :def
 ;(defmethod anf :fn
@@ -210,6 +216,18 @@
 (show-anf '(if 1 (identity (cps/call-cc 2)) 3))
 
 (show-anf '(if (cps/call-cc 1) (identity (cps/call-cc 2)) 3))
+
+(show-anf '{:x 1})
+
+(show-anf '{(cps/call-cc 1) 2})
+
+(show-anf '[1])
+
+(show-anf '[(cps/call-cc 1)])
+
+(show-anf '#{1})
+
+(show-anf '#{(cps/call-cc 1)})
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
