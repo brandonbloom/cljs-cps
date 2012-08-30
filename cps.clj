@@ -110,11 +110,14 @@
                             meta# ~(-> meta anf :form)]
                         (cljs.core/with-meta expr# meta#)))))
 
+(defmethod anf :do
+  [{:keys [env children] :as ast}]
+  (ana/analyze env `(do ~@(map (comp :form anf) children))))
+
 ;;TODO ALL THE OPS!
 ;(defmethod anf :def
 ;(defmethod anf :fn
 ;(defmethod anf :let                 ; also consider & test loop/recur
-;(defmethod anf :do
 ;(defmethod anf :try*
 ;(defmethod anf :ns
 ;(defmethod anf :deftype*
@@ -238,6 +241,11 @@
 (show-anf '(throw 1))
 
 (show-anf '(throw (cps/call-cc 1)))
+
+(show-anf '(do
+             1
+             (throw (cps/call-cc 2))
+             3))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
