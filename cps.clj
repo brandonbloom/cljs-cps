@@ -110,15 +110,31 @@
                             meta# ~(-> meta anf :form)]
                         (cljs.core/with-meta expr# meta#)))))
 
+(defn- anf-block
+  [{:keys [statements ret] :as ast}]
+  (when ast
+    (let [children (conj (vec statements) ret)]
+      (map (comp :form anf) children))))
+
 (defmethod anf :do
   [{:keys [env children] :as ast}]
-  (ana/analyze env `(do ~@(map (comp :form anf) children))))
+  (ana/analyze env `(do ~@(anf-block ast))))
+
+(defmethod anf :try*
+  [{:keys [env try catch name finally] :as ast}]
+  (ana/analyze env `(~'try*
+                     ~@(anf-block try)
+                     ~@(when catch
+                        (list (list* 'catch name
+                                     (anf-block catch))))
+                     ~@(when finally
+                        (list (cons 'finally
+                                    (anf-block finally)))))))
 
 ;;TODO ALL THE OPS!
 ;(defmethod anf :def
 ;(defmethod anf :fn
 ;(defmethod anf :let                 ; also consider & test loop/recur
-;(defmethod anf :try*
 ;(defmethod anf :ns
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
@@ -242,10 +258,26 @@
 
 (show-anf '(throw (cps/call-cc 1)))
 
+(show-anf '(do))
+
 (show-anf '(do
              1
              (throw (cps/call-cc 2))
              3))
+
+(show-anf '(try 1))
+
+(show-anf '(try (throw (cps/call-cc 1))))
+
+(show-anf '(try 1 (catch Error e 2)))
+
+(show-anf '(try 1 (finally 2)))
+
+(show-anf '(try 1 (catch Error e 2) (finally 3)))
+
+(show-anf '(try 1
+             (catch Error e (identity (cps/call-cc 2)))
+             (finally (identity (cps/call-cc 3)))))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
