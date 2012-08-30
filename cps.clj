@@ -41,7 +41,7 @@
 
 (defmethod anf :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:var :constant} op)
+  (when-not (#{:var :constant :js} op)
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
