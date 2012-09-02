@@ -133,13 +133,21 @@
                          (list (cons 'finally
                                      (anf-block finally)))))))
 
-(defmethod anf :let
+(defn- anf-bindings
   [{:keys [env bindings form] :as ast}]
   (ana/analyze env `(~(first form)
                         [~@(mapcat (fn [{:keys [name init]}]
                                      [name (-> init anf :form)])
                                    bindings)]
                         ~@(anf-block ast))))
+
+(defmethod anf :let
+  [ast]
+  (anf-bindings ast))
+
+(defmethod anf :letfn
+  [ast]
+  (anf-bindings ast))
 
 (defmethod anf :dot
   [{:keys [env target field method form] :as ast}]
@@ -165,7 +173,7 @@
                                        methods)))))
 
 ;;TODO ALL THE OPS!
-;(defmethod anf :letfn
+;
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
 
@@ -356,6 +364,10 @@
 
 (show-anf '(fn ([x] (identity (cps/call-cc x)))
                ([x y] (identity (cps/call-cc x y)))))
+
+(show-anf '(letfn [(f [x] x)] (f 1)))
+
+(show-anf '(letfn [(f [x] (identity (cps/call-cc x)))] (f 1)))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
