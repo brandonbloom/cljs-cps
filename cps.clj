@@ -125,16 +125,27 @@
   (ana/analyze env `(~'try*
                      ~@(anf-block try)
                      ~@(when catch
-                        (list (list* 'catch name
-                                     (anf-block catch))))
+                         (list (list* 'catch name
+                                      (anf-block catch))))
                      ~@(when finally
-                        (list (cons 'finally
-                                    (anf-block finally)))))))
+                         (list (cons 'finally
+                                     (anf-block finally)))))))
+
+(defmethod anf :let
+  [{:keys [env bindings form] :as ast}]
+  (let [bindings (map #(update-in % [:init] anf) bindings)
+        body-env (-> bindings last :init :env)]
+    (ana/analyze env `(~(first form)
+                          [~@(mapcat (fn [{:keys [name init]}]
+                                       [name (-> init anf :form)])
+                                     bindings)]
+                          ~@(anf-block (assoc ast :env body-env))))))
 
 ;;TODO ALL THE OPS!
 ;(defmethod anf :def
 ;(defmethod anf :fn
 ;(defmethod anf :let                 ; also consider & test loop/recur
+;(defmethod anf :letfn
 ;(defmethod anf :ns
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
@@ -164,7 +175,7 @@
   [{:keys [env f args] :as ast} k]
   (if (trivial? ast)
     ast
-    nil))
+    DO-STUFF-HERE))
 
 ;;TODO ALL THE OPS!
 ;(defmethod cps :invoke
@@ -181,6 +192,7 @@
 ;(defmethod cps :do
 ;(defmethod cps :try*
 ;(defmethod cps :let           ; if loop, use trampoline-like thing
+;(defmethod cps :letfn
 ;(defmethod cps :recur
 ;(defmethod cps :new
 ;(defmethod cps :set!
@@ -189,6 +201,17 @@
 ;(defmethod cps :defrecord*
 ;(defmethod cps :dot
 ;(defmethod cps :js
+
+;(defmethod cps :do
+;  [{:keys [env children] :as ast}]
+;  (let [[trivial [serious & rest]] (split-with serious? children)]
+;    (if (= trivial children)
+;      ast
+;      (ana/analyze env `(do ~@trivial
+;                            (let [x# ~(-> serious anf :form)]
+;                              ~@(map anf
+;  ;TODO: Abstract out cps-block
+;  DO-SOMETHING)
 
 ;(defmacro anf*
 ;  "Applies a selective ANF transform to a form."
@@ -207,6 +230,12 @@
 
 (use '[clojure.pprint :only (pprint)])
 
+(defn dbg [x]
+  (println "------------")
+  (pprint x)
+  (println "------------")
+  x)
+
 (trivial? (analyze '(defn f [x] x)))
 
 (trivial? (analyze '(defn f [] (cps/call-cc identity))))
@@ -217,6 +246,8 @@
     anf
     :form
     pprint))
+
+(show-anf 1)
 
 (show-anf '(identity 1))
 
@@ -260,10 +291,21 @@
 
 (show-anf '(do))
 
+(show-anf '(do 1 2 3))
+
 (show-anf '(do
              1
              (throw (cps/call-cc 2))
              3))
+
+(show-anf '(let [x 1]
+             (identity x)))
+
+(show-anf '(let [x (identity (cps/call-cc 1))]
+             2))
+
+(show-anf '(let [x 1]
+             (identity (cps/call-cc 2))))
 
 (show-anf '(try 1))
 
