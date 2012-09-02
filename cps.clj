@@ -41,7 +41,7 @@
 
 (defmethod anf :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:var :constant :js} op)
+  (when-not (#{:ns :var :constant :js} op)
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
@@ -141,16 +141,21 @@
                                      bindings)]
                           ~@(anf-block (assoc ast :env body-env))))))
 
+(defmethod anf :dot
+  [{:keys [env target field method form] :as ast}]
+  (if (serious? target)
+    (anf (ana/analyze env `(let [target# ~(:form target)]
+                             (~'. target# ~@(drop 2 form)))))
+    (if field
+      ast
+      (anf-application ast :args #(concat (take 3 form) %)))))
+
 ;;TODO ALL THE OPS!
 ;(defmethod anf :def
 ;(defmethod anf :fn
-;(defmethod anf :let                 ; also consider & test loop/recur
 ;(defmethod anf :letfn
-;(defmethod anf :ns
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
-;(defmethod anf :dot
-;(defmethod anf :js
 
 (defn- wrap-return
   [{:keys [env context] :as ast} k]
@@ -320,6 +325,12 @@
 (show-anf '(try 1
              (catch Error e (identity (cps/call-cc 2)))
              (finally (identity (cps/call-cc 3)))))
+
+(show-anf '(.f 1 2))
+
+(show-anf '(.f (cps/call-cc 1) 2))
+
+(show-anf '(.f 1 (cps/call-cc 2)))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
