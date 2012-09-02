@@ -34,6 +34,8 @@
   [ast]
   (not (serious? ast)))
 
+;;TODO: Nearly all use of metadata in analyze causes data loss when transformed
+
 (defmulti anf
   "Applies an Administrative Normal Form transformation to an AST.
   The transformation is selective with regard to trivial expressions."
@@ -150,8 +152,14 @@
       ast
       (anf-application ast :args #(concat (take 3 form) %)))))
 
+(defmethod anf :def
+  [{:keys [env init form] :as ast}]
+  (if (trivial? init)
+    ast
+    (ana/analyze env `(let [init# ~(-> init anf :form)]
+                        (~@(butlast form) init#)))))
+
 ;;TODO ALL THE OPS!
-;(defmethod anf :def
 ;(defmethod anf :fn
 ;(defmethod anf :letfn
 ;(defmethod anf :deftype*
@@ -300,7 +308,7 @@
 
 (show-anf '(do
              1
-             (throw (cps/call-cc 2))
+             (identity (cps/call-cc 2))
              3))
 
 (show-anf '(let [x 1]
@@ -331,6 +339,10 @@
 (show-anf '(.f (cps/call-cc 1) 2))
 
 (show-anf '(.f 1 (cps/call-cc 2)))
+
+(show-anf '(def x 1))
+
+(show-anf '(def x (cps/call-cc 1)))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
