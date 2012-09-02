@@ -41,6 +41,8 @@
   The transformation is selective with regard to trivial expressions."
   :op)
 
+(def anf* (comp :form anf))
+
 (defmethod anf :default
   [{:keys [env op] :as ast}]
   (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
@@ -52,7 +54,7 @@
     (if (every? trivial? args)
       ast
       (let [syms (repeatedly (count args) gensym)
-            forms (map (comp :form anf) args)]
+            forms (map anf* args)]
         (ana/analyze env `(let [~@(interleave syms forms)]
                             ~(f syms)))))))
 
@@ -90,16 +92,16 @@
   [{:keys [env target val] :as ast}]
   (if (trivial? val)
     ast
-    (ana/analyze env `(let [val# ~(-> val anf :form)]
+    (ana/analyze env `(let [val# ~(anf* val)]
                         (set! ~(:form target) val#)))))
 
 (defmethod anf :if
   [{:keys [env test then else] :as ast}]
-  (let [then (-> then anf :form)
-        else (when else [(-> else anf :form)])]
+  (let [then (anf* then)
+        else (when else [(anf* else)])]
     (ana/analyze env (if (trivial? test)
                        `(if ~(:form test) ~then ~@else)
-                       `(let [test# ~(-> test anf :form)]
+                       `(let [test# ~(anf* test)]
                           (if test# ~then ~@else))))))
 
 ;;TODO: Test this! Turns out that it's tricky to work around the reader.
@@ -108,15 +110,15 @@
   (if (every? trivial? children)
     ast
     ;NOTE: funky expr/meta evaluation order matches emit phase
-    (ana/analyze env `(let [expr# ~(-> expr anf :form)
-                            meta# ~(-> meta anf :form)]
+    (ana/analyze env `(let [expr# ~(anf* expr)
+                            meta# ~(anf* meta)]
                         (cljs.core/with-meta expr# meta#)))))
 
 (defn- anf-block
   [{:keys [statements ret] :as ast}]
   (when ast
     (let [children (conj (vec statements) ret)]
-      (map (comp :form anf) children))))
+      (map anf* children))))
 
 (defmethod anf :do
   [{:keys [env children] :as ast}]
@@ -137,7 +139,7 @@
   [{:keys [env bindings form] :as ast}]
   (ana/analyze env `(~(first form)
                         [~@(mapcat (fn [{:keys [name init]}]
-                                     [name (-> init anf :form)])
+                                     [name (anf* init)])
                                    bindings)]
                         ~@(anf-block ast))))
 
@@ -162,7 +164,7 @@
   [{:keys [env init form] :as ast}]
   (if (trivial? init)
     ast
-    (ana/analyze env `(let [init# ~(-> init anf :form)]
+    (ana/analyze env `(let [init# ~(anf* init)]
                         (~@(butlast form) init#)))))
 
 (defmethod anf :fn
@@ -225,27 +227,6 @@
 ;(defmethod cps :defrecord*
 ;(defmethod cps :dot
 ;(defmethod cps :js
-
-;(defmethod cps :do
-;  [{:keys [env children] :as ast}]
-;  (let [[trivial [serious & rest]] (split-with serious? children)]
-;    (if (= trivial children)
-;      ast
-;      (ana/analyze env `(do ~@trivial
-;                            (let [x# ~(-> serious anf :form)]
-;                              ~@(map anf
-;  ;TODO: Abstract out cps-block
-;  DO-SOMETHING)
-
-;(defmacro anf*
-;  "Applies a selective ANF transform to a form."
-;  [form]
-;  (-> (ana/analyze &env form) anf :form))
-;
-;(defmacro cps*
-;  "Applies a selective CPS transform to a form."
-;  [form]
-;  (-> (ana/analyze &env form) anf (cps nil) :form))
 
 (comment
 
