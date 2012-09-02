@@ -135,13 +135,11 @@
 
 (defmethod anf :let
   [{:keys [env bindings form] :as ast}]
-  (let [bindings (map #(update-in % [:init] anf) bindings)
-        body-env (-> bindings last :init :env)]
-    (ana/analyze env `(~(first form)
-                          [~@(mapcat (fn [{:keys [name init]}]
-                                       [name (-> init anf :form)])
-                                     bindings)]
-                          ~@(anf-block (assoc ast :env body-env))))))
+  (ana/analyze env `(~(first form)
+                        [~@(mapcat (fn [{:keys [name init]}]
+                                     [name (-> init anf :form)])
+                                   bindings)]
+                        ~@(anf-block ast))))
 
 (defmethod anf :dot
   [{:keys [env target field method form] :as ast}]
