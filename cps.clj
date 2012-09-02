@@ -43,7 +43,7 @@
 
 (defmethod anf :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:ns :var :constant :js} op)
+  (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
@@ -172,10 +172,9 @@
                                          `(~(first form) ~@(anf-block method)))
                                        methods)))))
 
-;;TODO ALL THE OPS!
-;
-;(defmethod anf :deftype*
-;(defmethod anf :defrecord*
+
+
+;; CPS STUFF BELOW
 
 (defn- wrap-return
   [{:keys [env context] :as ast} k]
@@ -368,6 +367,15 @@
 (show-anf '(letfn [(f [x] x)] (f 1)))
 
 (show-anf '(letfn [(f [x] (identity (cps/call-cc x)))] (f 1)))
+
+(show-anf '(deftype T [x] P (f [x] x)))
+
+(show-anf '(deftype T [x] P (f [x] (identity (cps/call-cc x)))))
+
+(show-anf '(defrecord R [x] P (f [x] x)))
+
+(show-anf '(defrecord R [x] P (f [x] (identity (cps/call-cc x)))))
+
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
