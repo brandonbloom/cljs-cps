@@ -159,8 +159,14 @@
     (ana/analyze env `(let [init# ~(-> init anf :form)]
                         (~@(butlast form) init#)))))
 
+(defmethod anf :fn
+  [{:keys [env form methods] :as ast}]
+  (let [prefix (first (split-with (complement seq?) form))]
+    (ana/analyze env `(~@prefix ~@(map (fn [{:keys [form] :as method}]
+                                         `(~(first form) ~@(anf-block method)))
+                                       methods)))))
+
 ;;TODO ALL THE OPS!
-;(defmethod anf :fn
 ;(defmethod anf :letfn
 ;(defmethod anf :deftype*
 ;(defmethod anf :defrecord*
@@ -343,6 +349,15 @@
 (show-anf '(def x 1))
 
 (show-anf '(def x (cps/call-cc 1)))
+
+(show-anf '(fn [x] x))
+
+(show-anf '(fn ([x] x) ([x y] x)))
+
+(show-anf '(fn [x] (identity (cps/call-cc x))))
+
+(show-anf '(fn ([x] (identity (cps/call-cc x)))
+               ([x y] (identity (cps/call-cc x y)))))
 
 ;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
 
