@@ -2,9 +2,6 @@
   (:require [cljs.compiler :as comp]
             [cljs.analyzer :as ana]))
 
-;; TODO: Put this into the env
-;(def ^:dynamic *k* 'cps/top-level-k)
-
 (defmacro call-cc [f & args]
   (throw (Exception. "call-cc must be used within a cps transform")))
 
@@ -178,24 +175,25 @@
 
 ;; CPS STUFF BELOW
 
-(defn- wrap-return
-  [{:keys [env context] :as ast} k]
-  (if (and k (= context :return))
-    (ana/analyze env `(k-return ~k)
-    k)))
+(def ^:dynamic *k* 'cps/top-level-k)
 
 (defmulti cps
   "Applies a Continuation Passing Style transformation to an AST.
   The transformation is selective with regard to trivial expressions and
   assumes that serious expressions are in Administrative Normal Form."
-  (fn [ast k]
-    (:op ast)))
+  :op)
+
+(defn- wrap-return
+  [{:keys [env form] :as ast}]
+  (if (= (:context env) :return)
+    (ana/analyze env `(cps/return ~*k* ~form))
+    ast))
 
 (defmethod cps :default
-  [{:keys [env op] :as ast} k]
+  [{:keys [env op] :as ast}]
   (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
     (ana/warning env (str "Unsupported op " op " in CPS transform")))
-  ast)
+  (wrap-return ast))
 
 ;;TODO ALL THE OPS!
 ;(defmethod cps :invoke
@@ -346,6 +344,18 @@
 (show-anf '(defrecord R [x] P (f [x] (identity (cps/call-cc x)))))
 
 
-;TODO? (trivial? (analyze '(do (defn ^:cps f [x] x) (f 1))))
+(defn show-cps [form]
+  (-> form
+    analyze
+    (assoc-in [:env :context] :return)
+    anf
+    cps
+    :form
+    pprint))
+
+
+(show-cps '(f (cps/call-cc g 1)))
+
+(:form (wrap-return (analyze '(f (cps/call-cc g 1)))))
 
 )

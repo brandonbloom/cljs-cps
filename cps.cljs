@@ -18,14 +18,3 @@
 
 (def top-level-k
   (Continuation. identity #(throw %)))
-
-
-(comment
-
-(cps* (f (call-cc g)))
-
-(anf* 'x)
-
-(anf* '(f x))
-
-)
