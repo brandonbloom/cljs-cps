@@ -121,7 +121,7 @@
       (map anf* children))))
 
 (defmethod anf :do
-  [{:keys [env children] :as ast}]
+  [{:keys [env] :as ast}]
   (ana/analyze env `(do ~@(anf-block ast))))
 
 (defmethod anf :try*
@@ -193,24 +193,16 @@
 
 (defmethod cps :default
   [{:keys [env op] :as ast} k]
-  ;;TODO: Error? Generic walk? Something else? See also anf :default
-  (ana/warning env (str "Unsupported op " op " in CPS transform"))
+  (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
+    (ana/warning env (str "Unsupported op " op " in CPS transform")))
   ast)
-
-(defmethod cps :invoke
-  [{:keys [env f args] :as ast} k]
-  (if (trivial? ast)
-    ast
-    DO-STUFF-HERE))
 
 ;;TODO ALL THE OPS!
 ;(defmethod cps :invoke
-;(defmethod cps :var
 ;(defmethod cps :meta
 ;(defmethod cps :map
 ;(defmethod cps :vector
 ;(defmethod cps :set
-;(defmethod cps :constant
 ;(defmethod cps :if
 ;(defmethod cps :throw
 ;(defmethod cps :def
@@ -222,11 +214,7 @@
 ;(defmethod cps :recur
 ;(defmethod cps :new
 ;(defmethod cps :set!
-;(defmethod cps :ns
-;(defmethod cps :deftype*
-;(defmethod cps :defrecord*
 ;(defmethod cps :dot
-;(defmethod cps :js
 
 (comment
 
