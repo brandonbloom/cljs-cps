@@ -11,6 +11,12 @@
 (defmacro raise [k error]
   (throw (Exception. "raise must be used within a cps transform")))
 
+(defmacro with-return [k f]
+  `(Continuation. ~f (.raisef ~k)))
+
+(defmacro with-raise [k f]
+  `(Continuation. (.returnf ~k) ~f))
+
 (def control-ops `#{call-cc return raise})
 
 (defn control-op?
@@ -183,6 +189,8 @@
   assumes that serious expressions are in Administrative Normal Form."
   :op)
 
+(def cps* (comp :form cps))
+
 (defn- wrap-return
   [{:keys [env form] :as ast}]
   (if (= (:context env) :return)
@@ -194,6 +202,55 @@
   (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
     (ana/warning env (str "Unsupported op " op " in CPS transform")))
   (wrap-return ast))
+
+(defn- cps-block
+  [{:keys [env statements ret] :as ast}]
+  (when ast
+    (let [children (conj (vec statements) ret)]
+      (if (every? trivial? children)
+        (conj (mapv :form statements) (:form (wrap-return ret)))
+        ;; Inject a let binding for serious statements and CPS transform that.
+        (let [[trivials [serious & more]] (split-with trivial? children)
+              sym (gensym "result__")
+              let-form `(let [~sym ~(:form serious)]
+                         ~@(if more
+                             (map :form more)
+                             [sym]))
+              let-ast (ana/analyze (:env serious) let-form)]
+          (conj (mapv :form trivials) (cps* let-ast)))))))
+
+(defmethod cps :do
+  [{:keys [env] :as ast}]
+  (ana/analyze env `(do ~@(cps-block ast))))
+
+(defmethod cps :let
+  [{:keys [env bindings form statements ret] :as ast}]
+  (let [[trivials [serious & more]] (split-with #(trivial? (:init %))
+                                                bindings)]
+    (ana/analyze env
+      (if serious
+        (let [serious-env (:env serious)
+              make-binding (fn [{:keys [name init]}] [name (:form init)])
+              k (gensym "k__")
+              body (map :form (conj (vec statements) ret))
+              body (binding [*k* k]
+                     (if more
+                       [(cps* (ana/analyze serious-env
+                                           `(let [~@(mapcat make-binding more)]
+                                              ~@body)))]
+                       (map #(cps* (ana/analyze serious-env %)) body)))
+              arg (:name serious)
+              k-form `(with-return ~*k* (fn [~k ~arg] ~@body))
+              [_ f & args] (-> serious :init :form) ;TODO: assumes call-cc ?
+              call `(~f ~k-form ~@args)]
+          (if (empty? trivials)
+            call
+            `(let [~@(mapcat make-binding trivials)]
+               ~call)))
+        `(~@(take 2 form) ~@(cps-block ast))))))
+
+
+
 
 ;;TODO ALL THE OPS!
 ;(defmethod cps :invoke
@@ -353,9 +410,21 @@
     :form
     pprint))
 
+(show-cps '(do 1 2 3))
+
+(show-cps '(do 1 (cps/call-cc f) 3))
+
+(show-cps '(do 1 (cps/call-cc f)))
+
+(show-cps '(do 1 (cps/call-cc f 2)))
 
 (show-cps '(f (cps/call-cc g 1)))
 
-(:form (wrap-return (analyze '(f (cps/call-cc g 1)))))
+(show-cps '(let [x (cps/call-cc f 1)] x))
+
+(show-cps '(let [x 1
+                 y (cps/call-cc f 2 3)
+                 z 4]
+             (+ x y z)))
 
 )
