@@ -199,7 +199,8 @@
 
 (defmethod cps :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
+  (when-not (#{:ns :var :constant :js :deftype* :defrecord*
+               :new :map :vector :set :set! :if :meta :dot} op)
     (ana/warning env (str "Unsupported op " op " in CPS transform")))
   (wrap-return ast))
 
@@ -254,22 +255,13 @@
 
 ;;TODO ALL THE OPS!
 ;(defmethod cps :invoke
-;(defmethod cps :meta
-;(defmethod cps :map
-;(defmethod cps :vector
-;(defmethod cps :set
-;(defmethod cps :if
 ;(defmethod cps :throw
 ;(defmethod cps :def
 ;(defmethod cps :fn
-;(defmethod cps :do
 ;(defmethod cps :try*
 ;(defmethod cps :let           ; if loop, use trampoline-like thing
 ;(defmethod cps :letfn
 ;(defmethod cps :recur
-;(defmethod cps :new
-;(defmethod cps :set!
-;(defmethod cps :dot
 
 (comment
 

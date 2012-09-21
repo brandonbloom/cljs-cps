@@ -17,4 +17,4 @@
   (instance? Continuation x))
 
 (def top-level-k
-  (Continuation. identity #(throw %)))
+  (Continuation. (fn [result] nil) #(throw %)))
