@@ -2,22 +2,36 @@
   (:require [cljs.compiler :as comp]
             [cljs.analyzer :as ana]))
 
+(use '[clojure.pprint :only (pprint)])
+(defn dbg [x]
+  (binding [*out* *err*]
+    (println "------------")
+    (pprint x)
+    (println "------------"))
+  x)
+
 (def ^:dynamic *k* nil)
+
+(defn call-cc* [f & args]
+  (assert false))
 
 (defmacro call-cc [f & args]
   (when-not *k*
-    (throw (Exception. "call-cc must be used within a cps transform"))))
+    (throw (Exception. "call-cc must be used within a cps transform")))
+  `(call-cc* ~@(next &form)))
 
 (defmacro with-cc [k & body]
   `(call-cc (fn [~k] ~@body)))
 
 (defmacro return [k value]
   (when-not *k*
-    (throw (Exception. "return must be used within a cps transform"))))
+    (throw (Exception. "return must be used within a cps transform")))
+  (list 'cps/-return k value))
 
 (defmacro raise [k error]
   (when-not *k*
-    (throw (Exception. "raise must be used within a cps transform"))))
+    (throw (Exception. "raise must be used within a cps transform")))
+  (list 'cps/-raise k error))
 
 (defmacro with-return [k f]
   `(Continuation. ~f (.raisef ~k)))
@@ -25,7 +39,7 @@
 (defmacro with-raise [k f]
   `(Continuation. (.returnf ~k) ~f))
 
-(def control-ops `#{call-cc return raise})
+(def control-ops `#{call-cc call-cc* return raise})
 
 (defn control-op?
   [{:keys [op info] :as ast}]
@@ -230,6 +244,10 @@
   [{:keys [env] :as ast}]
   (ana/analyze env `(do ~@(cps-block ast))))
 
+(defmethod cps :invoke
+  [{:keys [env form] :as ast}]
+  (cps (ana/analyze env `(do ~form)))) ;TODO: Cleanup excess 'do form
+
 (defmethod cps :let
   [{:keys [env bindings form statements ret] :as ast}]
   (let [[trivials [serious & more]] (split-with #(trivial? (:init %))
@@ -257,14 +275,7 @@
         `(~@(take 2 form) ~@(cps-block ast))))))
 
 
-(use '[clojure.pprint :only (pprint)])
-(defn dbg [x]
-  (binding [*out* *err*]
-    (println "------------")
-    (pprint x)
-    (println "------------"))
-  x)
-
+;;TODO: Rename this? This name implies to me a (js/setTimeout 0 f)
 (defmacro spawn
   "Transforms body into the continuation passing style and evaluates it.
   Evaluation is initially synchronous, but may utilize continuation control
@@ -276,11 +287,10 @@
   (binding [*k* 'cps/top-level-k]
     (-> (ana/analyze &env `(do ~@(next &form)))
         (assoc-in [:env :context] :statement)
-        anf cps :form dbg)))
+        anf cps :form)))
 
 
 ;;TODO ALL THE OPS!
-;(defmethod cps :invoke
 ;(defmethod cps :throw
 ;(defmethod cps :def
 ;(defmethod cps :fn
@@ -293,21 +303,28 @@
 
 (comment
 
+(def repl-env
+  (binding [ana/*cljs-ns* 'cljs.user]
+    (-> (ana/empty-env)
+        (ana/analyze '(ns cps-repl
+                        (:require-macros [cps :refer (call-cc)])))
+        :env
+        (assoc :ns (ana/get-namespace ana/*cljs-ns*)))))
+
+(def ^:dynamic *k* 'cps/top-level-k)
+
 (defn analyze [form]
-  (ana/analyze (ana/empty-env) form))
+  (ana/analyze repl-env form))
 
-(use '[clojure.pprint :only (pprint)])
+(trivial? (analyze 'x))
 
-(defn dbg [x]
-  (println "------------")
-  (pprint x)
-  (println "------------")
-  x)
-
+(trivial? (analyze '(call-cc identity)))
 
 (trivial? (analyze '(defn f [x] x)))
 
 (trivial? (analyze '(defn f [] (cps/call-cc identity))))
+
+(trivial? (analyze '(defn f [] (call-cc identity))))
 
 (defn show-anf [form]
   (-> form
@@ -320,43 +337,43 @@
 
 (show-anf '(identity 1))
 
-(show-anf '(identity 1 (cps/call-cc 2) 3 (cps/call-cc 4)))
+(show-anf '(identity 1 (call-cc 2) 3 (call-cc 4)))
 
 (show-anf '(Integer. 1))
 
-(show-anf '(Integer. (cps/call-cc 1)))
+(show-anf '(Integer. (call-cc 1)))
 
 (show-anf '(set! x 1))
 
-(show-anf '(set! x (cps/call-cc 1)))
+(show-anf '(set! x (call-cc 1)))
 
-(show-anf '(set! x (identity (cps/call-cc 1))))
+(show-anf '(set! x (identity (call-cc 1))))
 
 (show-anf '(if 1 2))
 
 (show-anf '(if 1 2 3))
 
-(show-anf '(if (cps/call-cc 1) 2 3))
+(show-anf '(if (call-cc 1) 2 3))
 
-(show-anf '(if 1 (identity (cps/call-cc 2)) 3))
+(show-anf '(if 1 (identity (call-cc 2)) 3))
 
-(show-anf '(if (cps/call-cc 1) (identity (cps/call-cc 2)) 3))
+(show-anf '(if (call-cc 1) (identity (call-cc 2)) 3))
 
 (show-anf '{:x 1})
 
-(show-anf '{(cps/call-cc 1) 2})
+(show-anf '{(call-cc 1) 2})
 
 (show-anf '[1])
 
-(show-anf '[(cps/call-cc 1)])
+(show-anf '[(call-cc 1)])
 
 (show-anf '#{1})
 
-(show-anf '#{(cps/call-cc 1)})
+(show-anf '#{(call-cc 1)})
 
 (show-anf '(throw 1))
 
-(show-anf '(throw (cps/call-cc 1)))
+(show-anf '(throw (call-cc 1)))
 
 (show-anf '(do))
 
@@ -364,21 +381,21 @@
 
 (show-anf '(do
              1
-             (identity (cps/call-cc 2))
+             (identity (call-cc 2))
              3))
 
 (show-anf '(let [x 1]
              (identity x)))
 
-(show-anf '(let [x (identity (cps/call-cc 1))]
+(show-anf '(let [x (identity (call-cc 1))]
              2))
 
 (show-anf '(let [x 1]
-             (identity (cps/call-cc 2))))
+             (identity (call-cc 2))))
 
 (show-anf '(try 1))
 
-(show-anf '(try (throw (cps/call-cc 1))))
+(show-anf '(try (throw (call-cc 1))))
 
 (show-anf '(try 1 (catch Error e 2)))
 
@@ -387,39 +404,39 @@
 (show-anf '(try 1 (catch Error e 2) (finally 3)))
 
 (show-anf '(try 1
-             (catch Error e (identity (cps/call-cc 2)))
-             (finally (identity (cps/call-cc 3)))))
+             (catch Error e (identity (call-cc 2)))
+             (finally (identity (call-cc 3)))))
 
 (show-anf '(.f 1 2))
 
-(show-anf '(.f (cps/call-cc 1) 2))
+(show-anf '(.f (call-cc 1) 2))
 
-(show-anf '(.f 1 (cps/call-cc 2)))
+(show-anf '(.f 1 (call-cc 2)))
 
 (show-anf '(def x 1))
 
-(show-anf '(def x (cps/call-cc 1)))
+(show-anf '(def x (call-cc 1)))
 
 (show-anf '(fn [x] x))
 
 (show-anf '(fn ([x] x) ([x y] x)))
 
-(show-anf '(fn [x] (identity (cps/call-cc x))))
+(show-anf '(fn [x] (identity (call-cc x))))
 
-(show-anf '(fn ([x] (identity (cps/call-cc x)))
-               ([x y] (identity (cps/call-cc x y)))))
+(show-anf '(fn ([x] (identity (call-cc x)))
+               ([x y] (identity (call-cc x y)))))
 
 (show-anf '(letfn [(f [x] x)] (f 1)))
 
-(show-anf '(letfn [(f [x] (identity (cps/call-cc x)))] (f 1)))
+(show-anf '(letfn [(f [x] (identity (call-cc x)))] (f 1)))
 
 (show-anf '(deftype T [x] P (f [x] x)))
 
-(show-anf '(deftype T [x] P (f [x] (identity (cps/call-cc x)))))
+(show-anf '(deftype T [x] P (f [x] (identity (call-cc x)))))
 
 (show-anf '(defrecord R [x] P (f [x] x)))
 
-(show-anf '(defrecord R [x] P (f [x] (identity (cps/call-cc x)))))
+(show-anf '(defrecord R [x] P (f [x] (identity (call-cc x)))))
 
 
 (defn show-cps [form]
@@ -431,20 +448,28 @@
     :form
     pprint))
 
+(show-cps 1)
+
 (show-cps '(do 1 2 3))
 
-(show-cps '(do 1 (cps/call-cc f) 3))
+(show-cps '(do (call-cc f)))
 
-(show-cps '(do 1 (cps/call-cc f)))
+(show-cps '(do 1 2 3))
 
-(show-cps '(do 1 (cps/call-cc f 2)))
+(show-cps '(do 1 (call-cc f) 3))
 
-(show-cps '(f (cps/call-cc g 1)))
+(show-cps '(do 1 (call-cc f)))
 
-(show-cps '(let [x (cps/call-cc f 1)] x))
+(show-cps '(do 1 (call-cc f 2)))
+
+(show-cps '(call-cc f))
+
+(show-cps '(f (call-cc g 1)))
+
+(show-cps '(let [x (call-cc f 1)] x))
 
 (show-cps '(let [x 1
-                 y (cps/call-cc f 2 3)
+                 y (call-cc f 2 3)
                  z 4]
              (+ x y z)))
 

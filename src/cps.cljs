@@ -1,5 +1,4 @@
-(ns cps
-  (:require-macros [cps :refer (call-cc)]))
+(ns cps)
 
 (defprotocol IContinuation
   (-return [_ result])
@@ -16,7 +15,7 @@
     (raisef error)))
 
 (defn continuation? [x]
-  (instance? Continuation x))
+  (satisfies? IContinuation x))
 
 (def top-level-k
   (Continuation. (fn [result] nil)
