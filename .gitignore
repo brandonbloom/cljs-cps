@@ -1,0 +1,4 @@
+clojurescript/
+target/
+out/
+.lein*

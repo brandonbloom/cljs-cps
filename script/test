@@ -1,0 +1,4 @@
+#!/bin/bash
+
+lein cljsbuild once
+cd out && $V8_HOME/d8 'main.js'

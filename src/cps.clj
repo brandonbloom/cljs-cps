@@ -2,14 +2,22 @@
   (:require [cljs.compiler :as comp]
             [cljs.analyzer :as ana]))
 
+(def ^:dynamic *k* nil)
+
 (defmacro call-cc [f & args]
-  (throw (Exception. "call-cc must be used within a cps transform")))
+  (when-not *k*
+    (throw (Exception. "call-cc must be used within a cps transform"))))
+
+(defmacro with-cc [k & body]
+  `(call-cc (fn [~k] ~@body)))
 
 (defmacro return [k value]
-  (throw (Exception. "return must be used within a cps transform")))
+  (when-not *k*
+    (throw (Exception. "return must be used within a cps transform"))))
 
 (defmacro raise [k error]
-  (throw (Exception. "raise must be used within a cps transform")))
+  (when-not *k*
+    (throw (Exception. "raise must be used within a cps transform"))))
 
 (defmacro with-return [k f]
   `(Continuation. ~f (.raisef ~k)))
@@ -181,8 +189,6 @@
 
 ;; CPS STUFF BELOW
 
-(def ^:dynamic *k* 'cps/top-level-k)
-
 (defmulti cps
   "Applies a Continuation Passing Style transformation to an AST.
   The transformation is selective with regard to trivial expressions and
@@ -241,7 +247,7 @@
                                               ~@body)))]
                        (map #(cps* (ana/analyze serious-env %)) body)))
               arg (:name serious)
-              k-form `(with-return ~*k* (fn [~k ~arg] ~@body))
+              k-form `(with-return ~*k* (fn [~k ~arg] ~@body)) ; try*/catch ??
               [_ f & args] (-> serious :init :form) ;TODO: assumes call-cc ?
               call `(~f ~k-form ~@args)]
           (if (empty? trivials)
@@ -251,6 +257,26 @@
         `(~@(take 2 form) ~@(cps-block ast))))))
 
 
+(use '[clojure.pprint :only (pprint)])
+(defn dbg [x]
+  (binding [*out* *err*]
+    (println "------------")
+    (pprint x)
+    (println "------------"))
+  x)
+
+(defmacro spawn
+  "Transforms body into the continuation passing style and evaluates it.
+  Evaluation is initially synchronous, but may utilize continuation control
+  forms to schedule asynchronous evaluations. Execution resumes outside the
+  spawn form immediately after the synchronous portion of body yields."
+  [& body]
+  (when *k*
+    (throw (Exception. "spawn may only be used outside of a cps transform.")))
+  (binding [*k* 'cps/top-level-k]
+    (-> (ana/analyze &env `(do ~@(next &form)))
+        (assoc-in [:env :context] :statement)
+        anf cps :form dbg)))
 
 
 ;;TODO ALL THE OPS!
@@ -262,6 +288,8 @@
 ;(defmethod cps :let           ; if loop, use trampoline-like thing
 ;(defmethod cps :letfn
 ;(defmethod cps :recur
+
+
 
 (comment
 
@@ -275,6 +303,7 @@
   (pprint x)
   (println "------------")
   x)
+
 
 (trivial? (analyze '(defn f [x] x)))
 
@@ -418,5 +447,6 @@
                  y (cps/call-cc f 2 3)
                  z 4]
              (+ x y z)))
+
 
 )
