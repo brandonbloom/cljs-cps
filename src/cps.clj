@@ -332,154 +332,159 @@
 
 (trivial? (analyze '(defn f [] (call-cc identity))))
 
-(defn show-anf [form]
-  (-> form
-    analyze
-    anf
-    :form
-    pprint))
+(defmacro go [form]
+  (let [ast (assoc-in (analyze form) [:env :context] :return)
+        ast' (anf ast)
+        p #(-> % :form pprint)]
+    (println "\n\nANF:\n")
+    (p ast')
+    (println "\nCPS:\n")
+    (p (cps ast'))
+    (println "\n")))
 
-(show-anf 1)
+(go 1)
 
-(show-anf '(identity 1))
+(go (identity 1))
 
-(show-anf '(identity 1 (call-cc 2) 3 (call-cc 4)))
+(go (identity 1 (call-cc 2) 3 (call-cc 4)))
 
-(show-anf '(Integer. 1))
+(go (Integer. 1))
 
-(show-anf '(Integer. (call-cc 1)))
+(go (Integer. (call-cc 1)))
 
-(show-anf '(set! x 1))
+(go (set! x 1))
 
-(show-anf '(set! x (call-cc 1)))
+(go (set! x (call-cc 1)))
 
-(show-anf '(set! x (identity (call-cc 1))))
+(go (set! x (identity (call-cc 1))))
 
-(show-anf '(if 1 2))
+(go (if 1 2))
 
-(show-anf '(if 1 2 3))
+(go (if 1 2 3))
 
-(show-anf '(if (call-cc 1) 2 3))
+(go (if (call-cc 1) 2 3))
 
-(show-anf '(if 1 (identity (call-cc 2)) 3))
+(go (if 1 (identity (call-cc 2)) 3))
 
-(show-anf '(if (call-cc 1) (identity (call-cc 2)) 3))
+(go (if (call-cc 1) (identity (call-cc 2)) 3))
 
-(show-anf '{:x 1})
+(go {:x 1})
 
-(show-anf '{(call-cc 1) 2})
+(go {(call-cc 1) 2})
 
-(show-anf '[1])
+(go [1])
 
-(show-anf '[(call-cc 1)])
+(go [(call-cc 1)])
 
-(show-anf '#{1})
+(go #{1})
 
-(show-anf '#{(call-cc 1)})
+(go #{(call-cc 1)})
 
-(show-anf '(throw 1))
+(go (throw 1))
 
-(show-anf '(throw (call-cc 1)))
+(go (throw (call-cc 1)))
 
-(show-anf '(do))
+(go (do))
 
-(show-anf '(do 1 2 3))
+(go (do 1 2 3))
 
-(show-anf '(do
-             1
-             (identity (call-cc 2))
-             3))
+(go (do
+      1
+      (identity (call-cc 2))
+      3))
 
-(show-anf '(let [x 1]
-             (identity x)))
+(go (let [x 1]
+      (identity x)))
 
-(show-anf '(let [x (identity (call-cc 1))]
-             2))
+(go (let [x (identity (call-cc 1))]
+     2))
 
-(show-anf '(let [x 1]
-             (identity (call-cc 2))))
+(go '(let [x 1]
+       (identity (call-cc 2))))
 
-(show-anf '(try 1))
+(go (try 1))
 
-(show-anf '(try (throw (call-cc 1))))
+(go (try (throw (call-cc 1))))
 
-(show-anf '(try 1 (catch Error e 2)))
+(go (try 1 (catch Error e 2)))
 
-(show-anf '(try 1 (finally 2)))
+(go (try 1 (finally 2)))
 
-(show-anf '(try 1 (catch Error e 2) (finally 3)))
+(go (try 1 (catch Error e 2) (finally 3)))
 
-(show-anf '(try 1
-             (catch Error e (identity (call-cc 2)))
-             (finally (identity (call-cc 3)))))
+(go (try 1
+      (catch Error e (identity (call-cc 2)))
+      (finally (identity (call-cc 3)))))
 
-(show-anf '(.f 1 2))
+(go (.f 1 2))
 
-(show-anf '(.f (call-cc 1) 2))
+(go (.f (call-cc 1) 2))
 
-(show-anf '(.f 1 (call-cc 2)))
+(go (.f 1 (call-cc 2)))
 
-(show-anf '(def x 1))
+(go (def x 1))
 
-(show-anf '(def x (call-cc 1)))
+(go (def x (call-cc 1)))
 
-(show-anf '(fn [x] x))
+(go (fn [x] x))
 
-(show-anf '(fn ([x] x) ([x y] x)))
+(go (fn ([x] x) ([x y] x)))
 
-(show-anf '(fn [x] (identity (call-cc x))))
+(go (fn [x] (identity (call-cc x))))
 
-(show-anf '(fn ([x] (identity (call-cc x)))
-               ([x y] (identity (call-cc x y)))))
+(go (fn ([x] (identity (call-cc x)))
+        ([x y] (identity (call-cc x y)))))
 
-(show-anf '(letfn [(f [x] x)] (f 1)))
+(go (js* "~{} + ~{}" 1 2))
 
-(show-anf '(letfn [(f [x] (identity (call-cc x)))] (f 1)))
+(go (js* "~{} + ~{}" 1 (call-cc f)))
 
-(show-anf '(deftype T [x] P (f [x] x)))
+(go (letfn [(f [x] x)] (f 1)))
 
-(show-anf '(deftype T [x] P (f [x] (identity (call-cc x)))))
+(go (letfn [(f [x] (identity (call-cc x)))] (f 1)))
 
-(show-anf '(defrecord R [x] P (f [x] x)))
+(go (deftype T [x] P (f [x] x)))
 
-(show-anf '(defrecord R [x] P (f [x] (identity (call-cc x)))))
+(go (deftype T [x] P (f [x] (identity (call-cc x)))))
+
+(go (defrecord R [x] P (f [x] x)))
+
+(go (defrecord R [x] P (f [x] (identity (call-cc x)))))
+
+(go (do x (call-cc y) z))
+
+(go (do x (w (call-cc y)) z))
+
+(go (do
+      (print \A)
+      (print (call-cc (fn [k] (return k \B))))
+      (print \C)))
 
 
-(defn show-cps [form]
-  (-> form
-    analyze
-    (assoc-in [:env :context] :return)
-    anf
-    cps
-    :form
-    pprint))
+(go (do (call-cc f)))
 
-(show-cps 1)
+(go (do x (call-cc y) z))
 
-(show-cps '(do 1 2 3))
+(go (do x (w (call-cc y)) z))
 
-(show-cps '(do (call-cc f)))
+(go (identity 1 (call-cc 2) 3 (call-cc 4)))
 
-(show-cps '(do 1 2 3))
+(go (call-cc f))
 
-(show-cps '(do 1 (call-cc f) 3))
+(go (f (call-cc g 1)))
 
-(show-cps '(do 1 (call-cc f)))
+(go (f (call-cc (fn [x] x))))
 
-(show-cps '(do 1 (call-cc f 2)))
+(go (let [x (call-cc f 1)] x))
 
-(show-cps '(call-cc f))
+(go (let [x 1
+          y (call-cc f 2 3)
+          z 4]
+      (+ x y z)))
 
-(show-cps '(f (call-cc g 1)))
-
-(show-cps '(f (call-cc (fn [x] x))))
-
-(show-cps '(let [x (call-cc f 1)] x))
-
-(show-cps '(let [x 1
-                 y (call-cc f 2 3)
-                 z 4]
-             (+ x y z)))
-
+(go (do
+      (print \A)
+      (print (call-cc (fn [k] (return k \B))))
+      (print \C)))
 
 )
