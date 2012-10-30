@@ -78,7 +78,7 @@
   (let [args (key ast)]
     (if (every? trivial? args)
       ast
-      (let [syms (repeatedly (count args) gensym)
+      (let [syms (repeatedly (count args) #(gensym "anf__"))
             forms (map anf* args)]
         (ana/analyze env `(let* [~@(interleave syms forms)]
                             ~(f syms)))))))
