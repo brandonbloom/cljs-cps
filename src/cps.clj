@@ -254,7 +254,7 @@
                                                 bindings)]
     (ana/analyze env
       (if serious
-        (let [serious-env (:env serious)
+        (let [serious-env (-> serious :init :env)
               make-binding (fn [{:keys [name init]}] [name (:form init)])
               k (gensym "k__")
               body (map :form (conj (vec statements) ret))
@@ -266,7 +266,7 @@
                        (map #(cps* (ana/analyze serious-env %)) body)))
               arg (:name serious)
               k-form `(with-return ~*k* (fn [~k ~arg] ~@body)) ; try*/catch ??
-              [_ f & args] (-> serious :init :form) ;TODO: assumes call-cc ?
+              [_ f & args] (-> serious :init :form) ;TODO: assumes call-cc* ??
               call `(~f ~k-form ~@args)]
           (if (empty? trivials)
             call
@@ -299,6 +299,7 @@
 ;(defmethod cps :letfn
 ;(defmethod cps :recur
 
+;TODO: Optimize continuations in tail positions.
 
 
 (comment
@@ -465,6 +466,8 @@
 (show-cps '(call-cc f))
 
 (show-cps '(f (call-cc g 1)))
+
+(show-cps '(f (call-cc (fn [x] x))))
 
 (show-cps '(let [x (call-cc f 1)] x))
 
