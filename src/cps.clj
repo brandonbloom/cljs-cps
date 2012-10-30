@@ -80,7 +80,7 @@
       ast
       (let [syms (repeatedly (count args) gensym)
             forms (map anf* args)]
-        (ana/analyze env `(let [~@(interleave syms forms)]
+        (ana/analyze env `(let* [~@(interleave syms forms)]
                             ~(f syms)))))))
 
 (defmethod anf :invoke
@@ -117,7 +117,7 @@
   [{:keys [env target val] :as ast}]
   (if (trivial? val)
     ast
-    (ana/analyze env `(let [val# ~(anf* val)]
+    (ana/analyze env `(let* [val# ~(anf* val)]
                         (set! ~(:form target) val#)))))
 
 (defmethod anf :if
@@ -126,7 +126,7 @@
         else (when else [(anf* else)])]
     (ana/analyze env (if (trivial? test)
                        `(if ~(:form test) ~then ~@else)
-                       `(let [test# ~(anf* test)]
+                       `(let* [test# ~(anf* test)]
                           (if test# ~then ~@else))))))
 
 ;;TODO: Test this! Turns out that it's tricky to work around the reader.
@@ -135,8 +135,8 @@
   (if (every? trivial? children)
     ast
     ;NOTE: funky expr/meta evaluation order matches emit phase
-    (ana/analyze env `(let [expr# ~(anf* expr)
-                            meta# ~(anf* meta)]
+    (ana/analyze env `(let* [expr# ~(anf* expr)
+                             meta# ~(anf* meta)]
                         (cljs.core/with-meta expr# meta#)))))
 
 (defn- anf-block
@@ -179,7 +179,7 @@
 (defmethod anf :dot
   [{:keys [env target field method form] :as ast}]
   (if (serious? target)
-    (anf (ana/analyze env `(let [target# ~(:form target)]
+    (anf (ana/analyze env `(let* [target# ~(:form target)]
                              (~'. target# ~@(drop 2 form)))))
     (if field
       ast
@@ -189,7 +189,7 @@
   [{:keys [env init form] :as ast}]
   (if (trivial? init)
     ast
-    (ana/analyze env `(let [init# ~(anf* init)]
+    (ana/analyze env `(let* [init# ~(anf* init)]
                         (~@(butlast form) init#)))))
 
 (defmethod anf :fn
@@ -233,7 +233,7 @@
         ;; Inject a let binding for serious statements and CPS transform that.
         (let [[trivials [serious & more]] (split-with trivial? children)
               sym (gensym "result__")
-              let-form `(let [~sym ~(:form serious)]
+              let-form `(let* [~sym ~(:form serious)]
                          ~@(if more
                              (map :form more)
                              [sym]))
@@ -261,16 +261,17 @@
               body (binding [*k* k]
                      (if more
                        [(cps* (ana/analyze serious-env
-                                           `(let [~@(mapcat make-binding more)]
+                                           `(let*
+                                              [~@(mapcat make-binding more)]
                                               ~@body)))]
                        (map #(cps* (ana/analyze serious-env %)) body)))
               arg (:name serious)
-              k-form `(with-return ~*k* (fn [~k ~arg] ~@body)) ; try*/catch ??
+              k-form `(with-return ~*k* (fn* [~k ~arg] ~@body)) ; try*/catch ??
               [_ f & args] (-> serious :init :form) ;TODO: assumes call-cc* ??
               call `(~f ~k-form ~@args)]
           (if (empty? trivials)
             call
-            `(let [~@(mapcat make-binding trivials)]
+            `(let* [~@(mapcat make-binding trivials)]
                ~call)))
         `(~@(take 2 form) ~@(cps-block ast))))))
 
