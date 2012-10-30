@@ -70,7 +70,7 @@
 
 (defmethod anf :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:ns :var :constant :js :deftype* :defrecord*} op)
+  (when-not (#{:ns :var :constant :deftype* :defrecord*} op)
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
@@ -112,6 +112,10 @@
 (defmethod anf :set
   [ast]
   (anf-application ast :items set))
+
+(defmethod anf :js
+  [{:keys [env form] :as ast}]
+  (anf-application ast :args #(concat (take 2 form) %)))
 
 (defmethod anf :set!
   [{:keys [env target val] :as ast}]
