@@ -39,7 +39,7 @@
 (defmacro with-raise [k f]
   `(Continuation. (.returnf ~k) ~f))
 
-(def control-ops `#{call-cc call-cc* return raise})
+(def control-ops `#{call-cc call-cc*})
 
 (defn control-op?
   [{:keys [op info] :as ast}]
@@ -174,6 +174,7 @@
 
 (defmethod anf :let
   [ast]
+  ;;TODO Handle loop
   (anf-bindings ast))
 
 (defmethod anf :letfn
@@ -250,33 +251,56 @@
 
 (defmethod cps :invoke
   [{:keys [env form] :as ast}]
-  (cps (ana/analyze env `(do ~form)))) ;TODO: Cleanup excess 'do form
+  (when (serious? ast)
+    (throw (Error. "TODO: Does this ever happen? move :invoke to :default ?")))
+  ast)
+
+(def ^:private make-binding (juxt :name #(:form (:init %))))
 
 (defmethod cps :let
   [{:keys [env bindings form statements ret] :as ast}]
-  (let [[trivials [serious & more]] (split-with #(trivial? (:init %))
-                                                bindings)]
-    (ana/analyze env
-      (if serious
-        (let [serious-env (-> serious :init :env)
-              make-binding (fn [{:keys [name init]}] [name (:form init)])
-              k (gensym "k__")
-              body (map :form (conj (vec statements) ret))
-              body (binding [*k* k]
-                     (if more
-                       [(cps* (ana/analyze serious-env
-                                           `(let*
-                                              [~@(mapcat make-binding more)]
-                                              ~@body)))]
-                       (map #(cps* (ana/analyze serious-env %)) body)))
-              arg (:name serious)
-              k-form `(with-return ~*k* (fn* [~k ~arg] ~@body)) ; try*/catch ??
-              [_ f & args] (-> serious :init :form) ;TODO: assumes call-cc* ??
-              call `(~f ~k-form ~@args)]
-          (if (empty? trivials)
-            call
-            `(let* [~@(mapcat make-binding trivials)]
-               ~call)))
+  ;;TODO handle loop
+  (let [[trivials [serious & more :as deferred]] (split-with #(trivial? (:init %)) bindings)]
+    (if serious
+      (let [serious-env (-> serious :init :env)
+            body (map :form (conj (vec statements) ret))]
+        (cond
+          (seq trivials)
+            ;; Isolate trivial bindings into a separate let.
+            (ana/analyze env
+              `(let [~@(mapcat make-binding trivials)]
+                 ~(cps* (ana/analyze serious-env
+                          `(let [~@(mapcat make-binding deferred)]
+                             ~@body)))))
+          (seq more)
+            ;; Isolate the first serious binding into it's own let.
+            (cps (ana/analyze env
+                   `(let ~(make-binding serious)
+                      (let [~@(mapcat make-binding more)]
+                        ~@body))))
+          (= (:op (:init serious)) :invoke)
+            ;; Call with current continuation, binding result to argument.
+            (let [k (gensym "k__")
+                  body (binding [*k* k]
+                         (cps* (ana/analyze serious-env `(do ~@body))))
+                  arg (:name serious)
+                  k-form `(with-return ~*k* (fn* [~k ~arg] ~@(next body)))
+                  [control-op f & args] (-> serious :init :form)]
+              (assert (= control-op 'cps/call-cc*))
+              (ana/analyze env
+                `(~f ~k-form ~@args)))
+          :else
+            ;; Collapse outer lets into tail position of inner lets.
+            (let [name (:name serious)
+                  {:keys [op bindings statements ret env]} (:init serious)]
+              (dbg op)
+              (assert (= op :let))
+              (cps (ana/analyze serious-env
+                     `(let* [~@(mapcat make-binding bindings)]
+                        ~@(map :form statements)
+                        (let* [~name ~(:form ret)]
+                          ~@body)))))))
+      (ana/analyze env
         `(~@(take 2 form) ~@(cps-block ast))))))
 
 
@@ -463,9 +487,38 @@
 
 (go (do (call-cc f)))
 
-(go (do x (call-cc y) z))
+(go (do a (call-cc b) c))
 
-(go (do x (w (call-cc y)) z))
+(go (do a (x (call-cc b)) c))                                ;;;;TODO: FIXME!
+
+(go (do a (x (call-cc b) y) c))                                ;;;;TODO: FIXME!
+
+(go (let [x 1
+          y (let [z (call-cc b)
+                  w (f z)]
+              w)]
+      (g x y)))
+
+(let [a 1
+      b (let [x 2]
+          (+ a x))
+      c 3]
+  (+ a b c))
+
+(let [a 1]
+  (let [b (let [x 2]
+            foo
+            (+ a x))]
+    (let [c 3]
+      (+ a b c))))
+
+(let [a 1]
+  (let [x 2]
+    foo
+    (let [b (+ a x)]
+      (let [c 3]
+        (+ a b c)))))
+
 
 (go (identity 1 (call-cc 2) 3 (call-cc 4)))
 
