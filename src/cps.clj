@@ -33,7 +33,7 @@
     (throw (Exception. "raise must be used within a cps transform")))
   (list 'cps/-raise k error))
 
-(defmacro with-return [k f]
+(defmacro update-return [k f]
   `(Continuation. ~f (.raisef ~k)))
 
 (defmacro with-raise [k f]
@@ -284,7 +284,7 @@
                   body (binding [*k* k]
                          (cps* (ana/analyze serious-env `(do ~@body))))
                   arg (:name serious)
-                  k-form `(with-return ~*k* (fn* [~k ~arg] ~@(next body)))
+                  k-form `(update-return ~*k* (fn* [~k ~arg] ~@(next body)))
                   [control-op f & args] (-> serious :init :form)]
               (assert (= control-op 'cps/call-cc*))
               (ana/analyze env
