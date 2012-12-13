@@ -93,8 +93,8 @@
     (anf-application ast :children identity)))
 
 (defmethod anf :new
-  [ast]
-  (anf-application ast :children #(cons 'new %)))
+  [{:keys [form] :as ast}]
+  (anf-application ast :args #(concat (take 2 form) %)))
 
 (defmethod anf :throw
   [ast]
