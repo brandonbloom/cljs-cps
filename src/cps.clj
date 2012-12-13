@@ -89,8 +89,8 @@
 (defmethod anf :invoke
   [{:keys [f] :as ast}]
   (if (control-op? f)
-    (anf-application ast :args #(cons (:form f) %)))
-    (anf-application ast :children identity))
+    (anf-application ast :args #(cons (:form f) %))
+    (anf-application ast :children identity)))
 
 (defmethod anf :new
   [ast]
