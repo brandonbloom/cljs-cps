@@ -3,12 +3,15 @@
             [cljs.analyzer :as ana]))
 
 (use '[clojure.pprint :only (pprint)])
-(defn dbg [x]
-  (binding [*out* *err*]
-    (println "------------")
-    (pprint x)
-    (println "------------"))
-  x)
+(defmacro dbg [x]
+  `(let [x# ~x]
+    (binding [*out* *err*]
+       (println "<<<<<<<<<<<<")
+       (pprint '~x)
+       (println "============")
+       (pprint x#)
+       (println ">>>>>>>>>>>")
+     x#)))
 
 (def ^:dynamic *k* nil)
 
