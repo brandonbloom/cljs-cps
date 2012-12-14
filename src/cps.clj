@@ -117,24 +117,22 @@
   (anf-application ast :items set))
 
 (defmethod anf :js
-  [{:keys [env form] :as ast}]
+  [{:keys [form] :as ast}]
   (anf-application ast :args #(concat (take 2 form) %)))
 
 (defmethod anf :set!
-  [{:keys [env target val] :as ast}]
-  (if (trivial? val)
-    ast
-    (ana/analyze env `(let* [val# ~(anf* val)]
-                        (set! ~(:form target) val#)))))
+  [{:keys [form] :as ast}]
+  (anf-application ast (comp vector :val) #(concat (take 2 form) %)))
 
 (defmethod anf :if
   [{:keys [env test then else] :as ast}]
   (let [then (anf* then)
-        else (when else [(anf* else)])]
+        else (anf* else)]
     (ana/analyze env (if (trivial? test)
-                       `(if ~(:form test) ~then ~@else)
+                       `(if ~(:form test) ~then ~else)
                        `(let* [test# ~(anf* test)]
-                          (if test# ~then ~@else))))))
+                          (if test# ~then ~else))))))
+
 
 ;;TODO: Test this! Turns out that it's tricky to work around the reader.
 (defmethod anf :meta
