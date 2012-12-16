@@ -163,18 +163,13 @@
                      ~@(when finally
                          [(list* 'finally (anf-block finally))]))))
 
-(defn- anf-bindings
+(defmethod anf :let ;;TODO Handle loop
   [{:keys [env bindings form] :as ast}]
   (ana/analyze env `(~(first form)
                         [~@(mapcat (fn [{:keys [name init]}]
                                      [name (anf* init)])
                                    bindings)]
                         ~@(anf-block ast))))
-
-(defmethod anf :let
-  [ast]
-  ;;TODO Handle loop
-  (anf-bindings ast))
 
 
 (defmethod anf :dot
