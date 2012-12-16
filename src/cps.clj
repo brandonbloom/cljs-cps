@@ -189,11 +189,8 @@
       (anf-application ast :args #(concat (take 3 form) %)))))
 
 (defmethod anf :def
-  [{:keys [env init form] :as ast}]
-  (if (trivial? init)
-    ast
-    (ana/analyze env `(let* [init# ~(anf* init)]
-                        (~@(butlast form) init#)))))
+  [{:keys [form] :as ast}]
+  (anf-application ast (comp vector :init) #(concat (butlast form) %)))
 
 (defmethod anf :fn
   [{:keys [env form methods] :as ast}]
@@ -467,9 +464,18 @@
 
 (go (.f 1 (call-cc 2)))
 
+(go (def x))
+
 (go (def x 1))
 
+(go (def x "doc str" 1))
+
 (go (def x (call-cc 1)))
+
+(go (def x "doc str" (call-cc 1)))
+
+;;TODO: I guess this works, but fn should kinda stop propegation of seriousness
+(go (def x "doc str" (fn [y] (call-cc f))))
 
 (go (fn [x] x))
 
