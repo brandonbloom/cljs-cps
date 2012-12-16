@@ -133,7 +133,6 @@
                        `(let* [test# ~(anf* test)]
                           (if test# ~then ~else))))))
 
-
 ;;TODO: Test this! Turns out that it's tricky to work around the reader.
 (defmethod anf :meta
   [{:keys [env meta expr children] :as ast}]
@@ -159,11 +158,9 @@
   (ana/analyze env `(~'try*
                      ~@(anf-block try)
                      ~@(when catch
-                         (list (list* 'catch name
-                                      (anf-block catch))))
+                         [(list* 'catch name (anf-block catch))])
                      ~@(when finally
-                         (list (cons 'finally
-                                     (anf-block finally)))))))
+                         [(list* 'finally (anf-block finally))]))))
 
 (defn- anf-bindings
   [{:keys [env bindings form] :as ast}]
@@ -294,7 +291,6 @@
             ;; Collapse outer lets into tail position of inner lets.
             (let [name (:name serious)
                   {:keys [op bindings statements ret env]} (:init serious)]
-              (dbg op)
               (assert (= op :let))
               (cps (ana/analyze serious-env
                      `(let* [~@(mapcat make-binding bindings)]
