@@ -363,9 +363,31 @@
     (p (cps ast'))
     (println "\n")))
 
+(def de-env (partial clojure.walk/postwalk
+                     (fn [x]
+                       (if (map? x)
+                         (dissoc x :env :children)
+                         x))))
+
+(def ppast (comp pprint de-env))
+
+(ppast
+(analyze '(f x (+ y z)))
+  )
+
 (go 1)
 
 (go (identity 1))
+
+(go (identity (identity 1)))
+
+(go (identity (call-cc f)))
+
+(go (call-cc f))
+
+(go (call-cc (f x :a) 1))
+
+(go (call-cc (call-cc f :a) 1))
 
 (go (identity 1 (call-cc 2) 3 (call-cc 4)))
 
@@ -409,19 +431,12 @@
 
 (go (do 1 2 3))
 
+(go (do 1 (call-cc 2) 3))
+
 (go (do
       1
       (identity (call-cc 2))
       3))
-
-(go (let [x 1]
-      (identity x)))
-
-(go (let [x (identity (call-cc 1))]
-     2))
-
-(go '(let [x 1]
-       (identity (call-cc 2))))
 
 (go (try 1))
 
@@ -436,6 +451,15 @@
 (go (try 1
       (catch Error e (identity (call-cc 2)))
       (finally (identity (call-cc 3)))))
+
+(go (let [x 1]
+      (identity x)))
+
+(go (let [x (identity (call-cc 1))]
+     2))
+
+(go '(let [x 1]
+       (identity (call-cc 2))))
 
 (go (.f 1 2))
 
