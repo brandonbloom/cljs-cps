@@ -230,10 +230,12 @@
   (ana/analyze env `(do ~@(cps-block ast))))
 
 (defmethod cps :invoke
-  [{:keys [env form] :as ast}]
-  (when (serious? ast)
-    (throw (Error. "TODO: Does this ever happen? move :invoke to :default ?")))
-  ast)
+  [{:keys [env f args] :as ast}]
+  (if (trivial? ast)
+    ast
+    (let [[f* & args*] (map :form args)]
+      (assert (= f 'cps/call-cc*))
+      (ana/analyze env (list* f* *k* args*)))))
 
 (def ^:private make-binding (juxt :name #(:form (:init %))))
 
