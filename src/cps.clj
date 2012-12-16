@@ -54,8 +54,9 @@
 (defn serious?
   "Serious expressions might evaluate one or more control forms."
   [{:keys [op f children] :as ast}]
-  (or (and (= op :invoke) (control-op? f))
-      (boolean (some serious? children))))
+  (and (not= op :fn)
+       (or (and (= op :invoke) (control-op? f))
+           (boolean (some serious? children)))))
 
 (defn trivial?
   "Trivial expressions definitely do not evaluate any control forms."
@@ -474,7 +475,6 @@
 
 (go (def x "doc str" (call-cc 1)))
 
-;;TODO: I guess this works, but fn should kinda stop propegation of seriousness
 (go (def x "doc str" (fn [y] (call-cc f))))
 
 (go (fn [x] x))
