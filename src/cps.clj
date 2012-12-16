@@ -74,7 +74,7 @@
 
 (defmethod anf :default
   [{:keys [env op] :as ast}]
-  (when-not (#{:ns :var :constant :deftype* :defrecord*} op)
+  (when-not (#{:ns :var :constant :fn :letfn :deftype* :defrecord*} op)
     (ana/warning env (str "Unsupported op " op " in ANF transform")))
   ast)
 
@@ -176,9 +176,6 @@
   ;;TODO Handle loop
   (anf-bindings ast))
 
-(defmethod anf :letfn
-  [ast]
-  (anf-bindings ast))
 
 (defmethod anf :dot
   [{:keys [env target field method form] :as ast}]
@@ -192,14 +189,6 @@
 (defmethod anf :def
   [{:keys [form] :as ast}]
   (anf-application ast (comp vector :init) #(concat (butlast form) %)))
-
-(defmethod anf :fn
-  [{:keys [env form methods] :as ast}]
-  (let [prefix (first (split-with (complement seq?) form))]
-    (ana/analyze env `(~@prefix ~@(map (fn [{:keys [form] :as method}]
-                                         `(~(first form) ~@(anf-block method)))
-                                       methods)))))
-
 
 
 ;; CPS STUFF BELOW
@@ -456,8 +445,8 @@
 (go (let [x (identity (call-cc 1))]
      2))
 
-(go '(let [x 1]
-       (identity (call-cc 2))))
+(go (let [x 1]
+      (identity (call-cc 2))))
 
 (go (.f 1 2))
 
@@ -477,30 +466,9 @@
 
 (go (def x "doc str" (fn [y] (call-cc f))))
 
-(go (fn [x] x))
-
-(go (fn ([x] x) ([x y] x)))
-
-(go (fn [x] (identity (call-cc x))))
-
-(go (fn ([x] (identity (call-cc x)))
-        ([x y] (identity (call-cc x y)))))
-
 (go (js* "~{} + ~{}" 1 2))
 
 (go (js* "~{} + ~{}" 1 (call-cc f)))
-
-(go (letfn [(f [x] x)] (f 1)))
-
-(go (letfn [(f [x] (identity (call-cc x)))] (f 1)))
-
-(go (deftype T [x] P (f [x] x)))
-
-(go (deftype T [x] P (f [x] (identity (call-cc x)))))
-
-(go (defrecord R [x] P (f [x] x)))
-
-(go (defrecord R [x] P (f [x] (identity (call-cc x)))))
 
 (go (do x (call-cc y) z))
 
